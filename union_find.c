@@ -1,5 +1,5 @@
 //
-// Tomás Oliveira e Silva, AED, December 2015
+// Taavi Metsvahi, AED, 2017
 //
 // union-find
 //
@@ -230,13 +230,13 @@ int main(void)
 {
   //Variables
   int i;
-  int times = 3;
+  int times = 100;
   
   int width = 20;
   int height = 10;
   int size = width*height;
   
-  int verboseSim = 1; // 0 - off, 1 - on, 2 - display table aswell
+  int verboseSim = 0; // 0 - off, 1 - on, 2 - display table aswell
 
   printf("Creating a board with dimentions of %d X %d and running the simulation %d times..\n",width,height,times);
   
@@ -244,12 +244,12 @@ int main(void)
   FILE *f = fopen("Results.txt", "w");
   if (f == NULL)
   {
-    printf("Error opening file!\n");
+    printf("Error opening the \"Results.txt\" file to save results in!\n");
     exit(1);
   }
   
   //Run the simulations
-  int result;
+  int result = 0;
   for(i = 0;i < times;i++){
     result = run_simulation(width, height, verboseSim);
     
