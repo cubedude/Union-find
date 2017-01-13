@@ -7,111 +7,95 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <time.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // custom graph implementation (with union-find infrastructure)
 //
 
-typedef struct edge
-{
-  struct edge *next;
-  int vertex_number;
-  int weight;
+inline int rand_int(int upper, int lower, int prev){
+  //Trying to randomise the seed with more random values and previous result
+  srand ( time(NULL)+rand()+prev);
+  return((rand() % (upper-lower+1)) + lower);
 }
-edge;
 
-edge *free_edges = NULL;
-
-typedef struct vertex
+typedef struct square
 {
-  struct edge *out_edges; // adjacency list head
-  int mark;               // for graph traversals
+  int turned;         // to check if it is turned
   int representative;     // representative of each connected component
 }
-vertex;
+square;
 
-typedef struct graph
+typedef struct board
 {
-  struct vertex *vertices;    // array of vertices (pointer)
-  int n_vertices;             // number of vertices
-  int n_connected_components; // number of connected components
+  struct square *squares;    // array of squares (pointer)
+  int width;                 // Width of the play ares
+  int height;                // Height of the play area
+  int n_squares;             // number of squares
+  int n_flipped;             // number of squares flipped
 }
-graph;
+board;
 
-edge *create_edge(void)
+board *create_board(int w, int h)
 {
-  edge *e;
+  board *b;
   int i;
-
-  if(free_edges == NULL)
+    
+  // Allocate memory for the board
+  b = (board *)malloc(sizeof(board));
+  assert(b != NULL);
+  
+  // Define how many squares there are including the system squares
+  b->width = w;
+  b->height = h;
+  b->n_squares = (w+1)*(h+2);
+  
+  // Allocate full memory for all of the squares
+  b->squares = (square *)malloc((size_t)b->n_squares * sizeof(square));
+  assert(b->squares != NULL);
+  
+  // Turn the most top and bottom rows into connected components
+  for(i = 0;i < (b->width+1);i++)
   {
-    free_edges = (edge *)malloc((size_t)1000 * sizeof(edge));
-    assert(free_edges != NULL);
-    for(i = 0;i < 999;i++)
-      free_edges[i].next = &free_edges[i + 1];
-    free_edges[i].next = NULL;
+	  // Top row
+	  b->squares[i].turned = 1;
+	  b->squares[i].representative = 0;
+	  
+	  // Bottom row
+	  int bottom = b->n_squares-i;
+	  b->squares[bottom].turned = 1;
+	  b->squares[bottom].representative = b->n_squares;
   }
-  e = free_edges;
-  free_edges = free_edges->next;
-  return e;
+  
+  return b;
 }
 
-graph *create_graph(int n_vertices)
+void destroy_board(board *b)
 {
-  graph *g;
-  int i;
-
-  assert(n_vertices >= 1 && n_vertices <= 1000000);
-  g = (graph *)malloc(sizeof(graph));
-  assert(g != NULL);
-  g->vertices = (vertex *)malloc((size_t)n_vertices * sizeof(vertex));
-  assert(g->vertices != NULL);
-  g->n_vertices = n_vertices;
-  g->n_connected_components = n_vertices;
-  for(i = 0;i < n_vertices;i++)
-  {
-    g->vertices[i].out_edges = NULL;
-    g->vertices[i].representative = i;
-  }
-  return g;
+  // Free the memory
+  free(b->squares);
+  free(b);
 }
 
-void destroy_graph(graph *g)
-{
-  edge *e;
-  int i;
-
-  assert(g != NULL && g->vertices != NULL);
-  for(i = 0;i < g->n_vertices;i++)
-    if(g->vertices[i].out_edges != NULL)
-    {
-      for(e = g->vertices[i].out_edges;e->next != NULL;e = e->next)
-        ;
-       e->next = free_edges;
-       free_edges = e;
-    }
-  free(g->vertices);
-  free(g);
-}
-
-int find_representative(graph *g,int vertex_number)
+int find_representative(board *b,int square_number)
 {
   int i,j,k;
 
   // find
-  for(i = vertex_number;i != g->vertices[i].representative;i = g->vertices[i].representative)
+  for(i = square_number;i != b->squares[i].representative;i = b->squares[i].representative)
     ;
   // path compression
-  for(j = vertex_number;j != i;j = k)
+  for(j = square_number;j != i;j = k)
   {
-    k = g->vertices[j].representative;
-    g->vertices[j].representative = i;
+    k = b->squares[j].representative;
+    b->squares[j].representative = i;
   }
   return i;
 }
 
-int add_edge(graph *g,int from,int to,int weight)
+int flip_square(board *b,int square_number)
 {
+/*
   int fi,ti;
   edge *e;
 
@@ -125,6 +109,7 @@ int add_edge(graph *g,int from,int to,int weight)
   g->vertices[from].out_edges = e;
   e->vertex_number = to;
   e->weight = weight;
+  
   fi = find_representative(g,from);
   ti = find_representative(g,to);
   if(fi != ti)
@@ -132,35 +117,54 @@ int add_edge(graph *g,int from,int to,int weight)
     g->vertices[ti].representative = fi;
     g->n_connected_components--;
   }
+*/
+  //Turn the square
+  b->squares[square_number].turned = 1;
+  b->squares[square_number].representative = square_number;
+  b->n_flipped++;
+  
+  //Find if can join something
+  int top = square_number-(b->width+1);
+  int bottom = square_number+(b->width+1);
+  int left = square_number-1;
+  int right = square_number+1;
+  
+  if(b->squares[top].turned == 1){
+  
+  }
+  
   return 1;
 }
 
-graph *init_graph(char *s,int undirected)
+board *init_board(int w, int h)
 {
-  int from,to,weight;
-  graph * g;
-  char *ss;
-  long l;
-  int i;
-
-  l = strtol(s,&ss,10);
-  assert(ss != s && l >= 1l && l <= 1000000l);
-  s = ss;
-  g = create_graph((int)l);
-  for(;;)
+  board * b;
+  int rnd, top, bottom, i;
+  
+  b = create_board(w,h);
+  
+  int min = b->width+2; //Do not touch the first row
+  int max = b->n_squares-(b->width+1); // Do not touch the last row
+  rnd = 0;
+  
+  for(i = 0;i < 50;i++)
+  //for(;;)
   {
-    while(*s == ' ' || *s == '\n' || *s == '\t' || *s == '\r')
-      s++;
-    if(*s == '\0')
-      return g;
-    l = strtol(s,&ss,10); assert(ss != s); s = ss; from = (int)l - 1;
-    l = strtol(s,&ss,10); assert(ss != s); s = ss; to = (int)l - 1;
-    l = strtol(s,&ss,10); assert(ss != s); s = ss; weight = (int)l;
-    i = add_edge(g,from,to,weight);
-    assert(i == 1);
-    if(undirected != 0 && from != to)
-      add_edge(g,to,from,weight);
+	rnd = rand_int(max,min,rnd); //Generate random number within the limits of the board area
+	
+	if(rnd % (b->width+1) != 0 && b->squares[rnd].turned != 1){ //Dont touch the first row and if the square isn't already flipped
+	  printf("Flipping square #%d\n",rnd);
+	  if(flip_square(b,rnd)){
+	    top = find_representative(b,0);
+	    bottom = find_representative(b,b->n_squares);
+			
+	    if(top == bottom){
+	      return b;
+	    }
+	  }
+	}
   }
+  return b;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -169,32 +173,22 @@ graph *init_graph(char *s,int undirected)
 
 int main(void)
 {
-  graph *g;
+  //Variables
+  board *b;
+  int width = 10;
+  int height = 20;
+  int size = width*height;
 
-  g = init_graph("9 "
-                 "1 2 2 1 3 4 1 4 6 "
-                 "2 3 1 2 5 1 "
-                 "3 5 2 3 6 2 "
-                 "4 7 2 4 8 2 "
-                 "5 6 1 5 9 4 "
-                 "6 7 2 6 9 2 "
-                 "7 9 3 "
-				 "8 9 1",
-                 1);
-                 
- /*
- "9 "
- "1 2 2 1 3 4 1 4 6 "
- "2 3 1 2 5 1 "
- "3 5 2 3 6 2 "
- "4 7 2 4 8 2 "
- "5 6 1 5 9 4 "
- "6 7 2 6 9 2 "
- "7 9 3 "
- "8 9 1"
-  */
+  //Starting the simulation
+  printf("Creating a board with dimentions of %d X %d and running the simulation..\n",width,height);
+  b = init_board(width, height);
   
-  printf("The graph has %d connected component%s\n",g->n_connected_components,(g->n_connected_components == 1) ? "" : "s");
-  destroy_graph(g);
+  //Calculate the result and display
+  float p = b->n_flipped/size;
+  printf("Finished the simulation with %d squares flipped. Percolation point is %f!\n",b->n_flipped,p);
+  
+  //Cleaning up
+  destroy_board(b);
+  
   return 0;
 }
