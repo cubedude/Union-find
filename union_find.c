@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define VERBOSE           0
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // custom graph implementation (with union-find infrastructure)
 //
@@ -49,10 +51,18 @@ board *create_board(int w, int h)
   b->width = w;
   b->height = h;
   b->n_squares = (w+1)*(h+2);
+  b->n_flipped = 0;
   
   // Allocate full memory for all of the squares
   b->squares = (square *)malloc((size_t)b->n_squares * sizeof(square));
   assert(b->squares != NULL);
+  
+  //Visit every node and reset the data
+  for(i = 0;i < b->n_squares;i++)
+  {
+	  b->squares[i].turned = 0;
+	  b->squares[i].representative = i;
+  }
   
   // Turn the most top and bottom rows into connected components
   for(i = 0;i < (b->width+1);i++)
@@ -77,69 +87,58 @@ void destroy_board(board *b)
   free(b);
 }
 
-int find_representative(board *b,int square_number)
+void change_representative(board *b,int from, int to)
 {
-  int i,j,k;
-
-  // find
-  for(i = square_number;i != b->squares[i].representative;i = b->squares[i].representative)
-    ;
-  // path compression
-  for(j = square_number;j != i;j = k)
-  {
-    k = b->squares[j].representative;
-    b->squares[j].representative = i;
+  //Go through every square
+  for(int i = 0;i < b->n_squares;i++){
+	//Check if it belongs under the group thats gonna get joined
+	if(b->squares[i].representative == from){
+	  //Change the representative to the new group
+	  b->squares[i].representative = to; 
+	}
   }
-  return i;
 }
 
 int flip_square(board *b,int square_number)
 {
-/*
-  int fi,ti;
-  edge *e;
-
-  assert(from >= 0 && from < g->n_vertices && to >= 0 && to < g->n_vertices && from != to);
-  for(e = g->vertices[from].out_edges;e != NULL && e->vertex_number != to;e = e->next)
-    ;
-  if(e != NULL)
-    return 0;
-  e = create_edge();
-  e->next = g->vertices[from].out_edges;
-  g->vertices[from].out_edges = e;
-  e->vertex_number = to;
-  e->weight = weight;
-  
-  fi = find_representative(g,from);
-  ti = find_representative(g,to);
-  if(fi != ti)
-  { // union
-    g->vertices[ti].representative = fi;
-    g->n_connected_components--;
-  }
-*/
   //Turn the square
   b->squares[square_number].turned = 1;
   b->squares[square_number].representative = square_number;
   b->n_flipped++;
   
   //Find if can join something
+    
+  //The top
   int top = square_number-(b->width+1);
-  int bottom = square_number+(b->width+1);
-  int left = square_number-1;
-  int right = square_number+1;
-  
   if(b->squares[top].turned == 1){
-  
+	change_representative(b,b->squares[square_number].representative,b->squares[top].representative);
   }
   
+  //The bottom
+  int bottom = square_number+(b->width+1);
+  if(b->squares[bottom].turned == 1){
+	change_representative(b,b->squares[square_number].representative,b->squares[bottom].representative);
+  }
+  
+  //The left
+  int left = square_number-1;
+  if(b->squares[left].turned == 1){
+	change_representative(b,b->squares[square_number].representative,b->squares[left].representative);
+  }
+  
+  //The right
+  int right = square_number+1;
+  if(b->squares[right].turned == 1){
+	change_representative(b,b->squares[square_number].representative,b->squares[right].representative);
+  }
+    
   return 1;
 }
 
 board *init_board(int w, int h)
 {
   board * b;
-  int rnd, top, bottom, i;
+  int rnd, top, bottom;
   
   b = create_board(w,h);
   
@@ -147,24 +146,80 @@ board *init_board(int w, int h)
   int max = b->n_squares-(b->width+1); // Do not touch the last row
   rnd = 0;
   
-  for(i = 0;i < 50;i++)
-  //for(;;)
+  //for(int i = 0;i < 500000;i++)
+  for(;;)
   {
 	rnd = rand_int(max,min,rnd); //Generate random number within the limits of the board area
 	
 	if(rnd % (b->width+1) != 0 && b->squares[rnd].turned != 1){ //Dont touch the first row and if the square isn't already flipped
+  #if VERBOSE != 0
 	  printf("Flipping square #%d\n",rnd);
+  #endif
 	  if(flip_square(b,rnd)){
-	    top = find_representative(b,0);
-	    bottom = find_representative(b,b->n_squares);
-			
+	    top = b->squares[0].representative;
+	    bottom = b->squares[(b->n_squares-b->width)].representative;
+  #if VERBOSE != 0
+		printf("Top: %d, Bottom: %d\n",top,bottom);
+  #endif
 	    if(top == bottom){
-	      return b;
+  #if VERBOSE != 0
+		  printf("BREAK!\n");
+  #endif
+	      break;
 	    }
 	  }
 	}
+	else{
+	  //printf("Square #%d is already flipped or not valid\n",rnd);
+	}
   }
   return b;
+}
+
+int run_simulation(int width, int height, int verbose)
+{
+  //Variables
+  board *b;
+  int size = width*height;
+
+  //Starting the simulation
+  if(verbose)
+    printf("Creating a board with dimentions of %d X %d and running the simulation..\n",width,height);
+    
+  b = init_board(width, height);
+  
+  //Calculate the result and display
+  if(verbose)
+    printf("Finished the simulation with %d squares flipped out of %d!\n",b->n_flipped,size);
+  
+  if(verbose == 2){
+	  int i,j;
+	  int n = 0;
+	  
+	  for(j = 0;j < (height+2);j++){
+		for(i = 0;i < (width+1);i++){
+		  if(b->squares[n].turned == 1){
+			printf("|%-3d",b->squares[n].representative); 
+		  }
+		  else{
+			printf("|   "); 
+		  }
+		  n++;
+		}
+		printf("|\n");
+		for(i = 0;i < (width+1);i++){
+			printf("----"); 
+		}
+		printf("|\n"); 
+	  }  
+  }
+  
+  int changed = b->n_flipped;
+  
+  //Cleaning up
+  destroy_board(b);
+  
+  return changed;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -174,21 +229,37 @@ board *init_board(int w, int h)
 int main(void)
 {
   //Variables
-  board *b;
-  int width = 10;
-  int height = 20;
+  int i;
+  int times = 3;
+  
+  int width = 20;
+  int height = 10;
   int size = width*height;
+  
+  int verboseSim = 1; // 0 - off, 1 - on, 2 - display table aswell
 
-  //Starting the simulation
-  printf("Creating a board with dimentions of %d X %d and running the simulation..\n",width,height);
-  b = init_board(width, height);
+  printf("Creating a board with dimentions of %d X %d and running the simulation %d times..\n",width,height,times);
   
-  //Calculate the result and display
-  float p = b->n_flipped/size;
-  printf("Finished the simulation with %d squares flipped. Percolation point is %f!\n",b->n_flipped,p);
+  //Opening the file to save results into
+  FILE *f = fopen("Results.txt", "w");
+  if (f == NULL)
+  {
+    printf("Error opening file!\n");
+    exit(1);
+  }
   
-  //Cleaning up
-  destroy_board(b);
+  //Run the simulations
+  int result;
+  for(i = 0;i < times;i++){
+    result = run_simulation(width, height, verboseSim);
+    
+    // Output the results
+	fprintf(f, "Run #%d: %d / %d\n", (i+1), result, size);
+	printf("Run #%d: %d / %d\n", (i+1), result, size);
+  }
+  
+  printf("Completed %d runs and saved the results into \"Results.txt\" file...\n",i);
+  fclose(f);
   
   return 0;
 }
